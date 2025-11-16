@@ -294,12 +294,18 @@
         return players.find(p => p.name.toLowerCase() === trimmed) || null;
       };
 
+      // UPDATED: prevent same player in both boxes
       const handleAddTeam = () => {
         const p1 = findPlayer(p1Name);
         const p2 = findPlayer(p2Name);
 
         if (!p1 || !p2) {
           alert("Please choose valid Player 1 and Player 2 names (from the list).");
+          return;
+        }
+
+        if (p1.name === p2.name) {
+          alert("Player 1 and Player 2 must be two different players.");
           return;
         }
 
@@ -402,7 +408,7 @@
         doc.setTextColor(0, 0, 0);
 
         // Teams list
-        teams.forEach((t, index) => {
+        teams.forEach((t) => {
           // New page if we're near the bottom
           if (y > 740) {
             doc.addPage();
