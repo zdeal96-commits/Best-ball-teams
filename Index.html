@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Front & Back 9 Best Ball – Custom Teams</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- jsPDF for PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
@@ -205,30 +207,6 @@
       return [...playersMap.values()];
     };
 
-    // CSV download helper
-    const downloadCSV = (filename, rows) => {
-      const csv = rows
-        .map(r =>
-          r
-            .map(field => {
-              const s = String(field ?? "");
-              return s.includes(",") ? `"${s.replace(/"/g, '""')}"` : s;
-            })
-            .join(",")
-        )
-        .join("\n");
-
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    };
-
     // Compute hole-by-hole best ball front/back
     const computeFrontBackBestBall = (p1, p2) => {
       let front = 0;
@@ -339,16 +317,89 @@
         setP2Suggestions([]);
       };
 
+      // PDF Download
       const handleDownloadTeams = () => {
         if (!teams.length) {
           alert("No teams to download yet.");
           return;
         }
-        const rows = [["Player1", "Player2", "FrontBestBall", "BackBestBall"]];
-        teams.forEach(t => {
-          rows.push([t.p1, t.p2, t.frontBB, t.backBB]);
+
+        if (!window.jspdf || !window.jspdf.jsPDF) {
+          alert("PDF library failed to load. Please refresh and try again.");
+          return;
+        }
+
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: "pt", format: "letter" });
+
+        // Colors similar to site
+        const greenDark = { r: 20, g: 90, b: 50 };   // #145a32-ish
+        const greenMid  = { r: 30, g: 132, b: 73 };  // #1e8449-ish;
+
+        let y = 50;
+        const leftMargin = 50;
+        const rightMargin = 550;
+
+        // Title
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(18);
+        doc.setTextColor(greenDark.r, greenDark.g, greenDark.b);
+        doc.text("Best Ball Teams – Front & Back 9", leftMargin, y);
+
+        y += 20;
+        doc.setDrawColor(greenDark.r, greenDark.g, greenDark.b);
+        doc.setLineWidth(1);
+        doc.line(leftMargin, y, rightMargin, y);
+
+        y += 25;
+
+        doc.setFontSize(11);
+        doc.setTextColor(0, 0, 0);
+
+        teams.forEach((t, index) => {
+          // New page if we're near the bottom
+          if (y > 740) {
+            doc.addPage();
+            y = 50;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(18);
+            doc.setTextColor(greenDark.r, greenDark.g, greenDark.b);
+            doc.text("Best Ball Teams – Front & Back 9 (cont.)", leftMargin, y);
+            y += 20;
+            doc.setDrawColor(greenDark.r, greenDark.g, greenDark.b);
+            doc.setLineWidth(1);
+            doc.line(leftMargin, y, rightMargin, y);
+            y += 25;
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(11);
+            doc.setTextColor(0, 0, 0);
+          }
+
+          // Team name in green
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(12);
+          doc.setTextColor(greenMid.r, greenMid.g, greenMid.b);
+          doc.text(`${t.p1} & ${t.p2}`, leftMargin, y);
+
+          // Front / Back lines
+          y += 16;
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
+          doc.setTextColor(0, 0, 0);
+          doc.text(`Front Best Ball: ${t.frontBB}`, leftMargin + 20, y);
+
+          y += 14;
+          doc.text(`Back Best Ball: ${t.backBB}`, leftMargin + 20, y);
+
+          // Divider line between teams
+          y += 18;
+          doc.setDrawColor(225, 230, 235);
+          doc.setLineWidth(0.5);
+          doc.line(leftMargin, y, rightMargin, y);
+          y += 14;
         });
-        downloadCSV("bestball_teams_front_back.csv", rows);
+
+        doc.save("bestball_teams.pdf");
       };
 
       return html`
@@ -364,7 +415,7 @@
                   1) Add Best-Ball Teams (Front & Back)
                 </h2>
                 <button class="btn" onClick=${handleDownloadTeams} disabled=${teams.length === 0}>
-                  Download Teams (CSV)
+                  Download Teams (PDF)
                 </button>
               </div>
 
