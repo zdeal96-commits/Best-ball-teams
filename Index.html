@@ -235,11 +235,15 @@
       const [p2Suggestions, setP2Suggestions] = useState([]);
       const [teams, setTeams] = useState([]); // {p1, p2, frontBB, backBB}
 
+      // side winners state
+      const [sideWinners, setSideWinners] = useState(null);
+
       const handleUpload = async (file) => {
         setLoading(true);
         setMsg("");
         setPlayers([]);
         setTeams([]);
+        setSideWinners(null);
         const text = await file.text();
         const parsed = parsePlayersFromCSV(text);
         if (!parsed.length) {
@@ -315,9 +319,48 @@
         setP2Name("");
         setP1Suggestions([]);
         setP2Suggestions([]);
+        setSideWinners(null); // reset winners if teams changed
       };
 
-      // PDF Download
+      const computeWinners = (teamsList) => {
+        if (!teamsList.length) return null;
+
+        let minFront = Infinity;
+        let minBack = Infinity;
+
+        teamsList.forEach(t => {
+          if (t.frontBB < minFront) minFront = t.frontBB;
+          if (t.backBB < minBack) minBack = t.backBB;
+        });
+
+        const frontWinners = teamsList.filter(t => t.frontBB === minFront);
+        const backWinners  = teamsList.filter(t => t.backBB === minBack);
+
+        const sweepTeams = frontWinners.filter(f =>
+          backWinners.some(
+            b => b.p1 === f.p1 && b.p2 === f.p2
+          )
+        );
+
+        return {
+          minFront,
+          minBack,
+          frontWinners,
+          backWinners,
+          sweepTeams,
+        };
+      };
+
+      const handleShowSideWinners = () => {
+        if (!teams.length) {
+          alert("Add at least one team first.");
+          return;
+        }
+        const result = computeWinners(teams);
+        setSideWinners(result);
+      };
+
+      // PDF Download with winners
       const handleDownloadTeams = () => {
         if (!teams.length) {
           alert("No teams to download yet.");
@@ -328,6 +371,8 @@
           alert("PDF library failed to load. Please refresh and try again.");
           return;
         }
+
+        const winners = computeWinners(teams);
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ unit: "pt", format: "letter" });
@@ -356,6 +401,7 @@
         doc.setFontSize(11);
         doc.setTextColor(0, 0, 0);
 
+        // Teams list
         teams.forEach((t, index) => {
           // New page if we're near the bottom
           if (y > 740) {
@@ -399,6 +445,71 @@
           y += 14;
         });
 
+        // Winners section
+        if (winners) {
+          const { minFront, minBack, frontWinners, backWinners, sweepTeams } = winners;
+
+          // New page if needed
+          if (y > 700) {
+            doc.addPage();
+            y = 50;
+          }
+
+          y += 10;
+          doc.setFont("helvetica", "bold");
+          doc.setFontSize(14);
+          doc.setTextColor(greenDark.r, greenDark.g, greenDark.b);
+          doc.text("Side Winners", leftMargin, y);
+
+          y += 12;
+          doc.setDrawColor(greenDark.r, greenDark.g, greenDark.b);
+          doc.setLineWidth(0.8);
+          doc.line(leftMargin, y, rightMargin, y);
+          y += 18;
+
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(11);
+          doc.setTextColor(0, 0, 0);
+
+          // Front winners
+          doc.setFont("helvetica", "bold");
+          doc.text(`Front 9 Winner(s) – ${minFront}`, leftMargin, y);
+          y += 14;
+          doc.setFont("helvetica", "normal");
+          frontWinners.forEach(t => {
+            doc.text(`• ${t.p1} & ${t.p2}`, leftMargin + 18, y);
+            y += 14;
+          });
+
+          y += 8;
+
+          // Back winners
+          doc.setFont("helvetica", "bold");
+          doc.text(`Back 9 Winner(s) – ${minBack}`, leftMargin, y);
+          y += 14;
+          doc.setFont("helvetica", "normal");
+          backWinners.forEach(t => {
+            doc.text(`• ${t.p1} & ${t.p2}`, leftMargin + 18, y);
+            y += 14;
+          });
+
+          // Clean sweep
+          if (sweepTeams && sweepTeams.length > 0) {
+            y += 18;
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(12);
+            doc.setTextColor(200, 80, 0); // orange-ish highlight
+            sweepTeams.forEach(t => {
+              doc.text(
+                `🔥 Clean Sweep: ${t.p1} & ${t.p2} won BOTH Front and Back 9!`,
+                leftMargin,
+                y
+              );
+              y += 16;
+            });
+          }
+        }
+
         doc.save("bestball_teams.pdf");
       };
 
@@ -414,13 +525,18 @@
                 <h2 class="text-lg font-semibold text-green-700">
                   1) Add Best-Ball Teams (Front & Back)
                 </h2>
-                <button class="btn" onClick=${handleDownloadTeams} disabled=${teams.length === 0}>
-                  Download Teams (PDF)
-                </button>
+                <div class="flex gap-2">
+                  <button class="btn" onClick=${handleShowSideWinners} disabled=${teams.length === 0}>
+                    Find Side Winners
+                  </button>
+                  <button class="btn" onClick=${handleDownloadTeams} disabled=${teams.length === 0}>
+                    Download Teams (PDF)
+                  </button>
+                </div>
               </div>
 
               <p class="text-xs text-gray-600">
-                First upload a CSV below to load player scores. Then choose Player 1 and Player 2.
+                Upload a CSV below to load player scores. Then choose Player 1 and Player 2.
                 We’ll calculate the Front 9 and Back 9 best-ball totals hole by hole.
                 Once a name is used in any team, it is removed from the suggestions list.
               </p>
@@ -509,6 +625,34 @@
                       </div>
                     `)}
                   </div>
+                </div>
+              `}
+
+              ${sideWinners && html`
+                <div class="mt-4 border-t border-gray-200 pt-3 text-sm">
+                  <h3 class="text-sm font-semibold text-green-700 mb-2">Side Winners</h3>
+
+                  <div class="mb-2">
+                    <div class="font-semibold">Front 9 – ${sideWinners.minFront}</div>
+                    ${sideWinners.frontWinners.map(t => html`
+                      <div>• ${t.p1} & ${t.p2}</div>
+                    `)}
+                  </div>
+
+                  <div class="mb-2">
+                    <div class="font-semibold">Back 9 – ${sideWinners.minBack}</div>
+                    ${sideWinners.backWinners.map(t => html`
+                      <div>• ${t.p1} & ${t.p2}</div>
+                    `)}
+                  </div>
+
+                  ${sideWinners.sweepTeams && sideWinners.sweepTeams.length > 0 && html`
+                    <div class="mt-1 text-orange-700 font-semibold">
+                      ${sideWinners.sweepTeams.map(t => html`
+                        <div>🔥 Clean Sweep: ${t.p1} & ${t.p2} won BOTH Front and Back!</div>
+                      `)}
+                    </div>
+                  `}
                 </div>
               `}
             </div>
