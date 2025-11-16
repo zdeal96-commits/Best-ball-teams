@@ -282,10 +282,18 @@
         [playerNames, usedNameSet]
       );
 
-      const filterNames = (value) => {
+      // 🔍 Filter names, with optional "otherName" to exclude (so P2 can't show P1, etc.)
+      const filterNames = (value, otherName = "") => {
         const v = value.trim().toLowerCase();
-        if (!v) return [];
-        return availableNames.filter(n => n.toLowerCase().includes(v)).slice(0, 10);
+        const other = otherName.trim().toLowerCase();
+        return availableNames
+          .filter(n => {
+            const ln = n.toLowerCase();
+            if (other && ln === other) return false;    // exclude the other selected player
+            if (!v) return true;
+            return ln.includes(v);
+          })
+          .slice(0, 10);
       };
 
       const findPlayer = (name) => {
@@ -294,7 +302,7 @@
         return players.find(p => p.name.toLowerCase() === trimmed) || null;
       };
 
-      // UPDATED: prevent same player in both boxes
+      // UPDATED: prevent same player in both boxes (UI & logic)
       const handleAddTeam = () => {
         const p1 = findPlayer(p1Name);
         const p2 = findPlayer(p2Name);
@@ -304,7 +312,10 @@
           return;
         }
 
-        if (p1.name === p2.name) {
+        const n1 = p1.name.trim().toLowerCase();
+        const n2 = p2.name.trim().toLowerCase();
+
+        if (n1 === n2) {
           alert("Player 1 and Player 2 must be two different players.");
           return;
         }
@@ -556,9 +567,9 @@
                     onInput=${e => {
                       const v = e.target.value;
                       setP1Name(v);
-                      setP1Suggestions(filterNames(v));
+                      setP1Suggestions(filterNames(v, p2Name));
                     }}
-                    onFocus=${e => setP1Suggestions(filterNames(e.target.value))}
+                    onFocus=${e => setP1Suggestions(filterNames(e.target.value, p2Name))}
                     placeholder=${players.length === 0 ? "Upload CSV first…" : "Start typing a name…"}
                     disabled=${players.length === 0 || availableNames.length === 0}
                   />
@@ -587,9 +598,9 @@
                     onInput=${e => {
                       const v = e.target.value;
                       setP2Name(v);
-                      setP2Suggestions(filterNames(v));
+                      setP2Suggestions(filterNames(v, p1Name));
                     }}
-                    onFocus=${e => setP2Suggestions(filterNames(e.target.value))}
+                    onFocus=${e => setP2Suggestions(filterNames(e.target.value, p1Name))}
                     placeholder=${players.length === 0 ? "Upload CSV first…" : "Start typing a name…"}
                     disabled=${players.length === 0 || availableNames.length === 0}
                   />
