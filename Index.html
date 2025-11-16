@@ -285,10 +285,25 @@
         [players]
       );
 
+      // names already used in teams (either slot)
+      const usedNameSet = useMemo(() => {
+        const s = new Set();
+        for (const t of teams) {
+          s.add(t.p1);
+          s.add(t.p2);
+        }
+        return s;
+      }, [teams]);
+
+      const availableNames = useMemo(
+        () => playerNames.filter(n => !usedNameSet.has(n)),
+        [playerNames, usedNameSet]
+      );
+
       const filterNames = (value) => {
         const v = value.trim().toLowerCase();
         if (!v) return [];
-        return playerNames.filter(n => n.toLowerCase().includes(v)).slice(0, 10);
+        return availableNames.filter(n => n.toLowerCase().includes(v)).slice(0, 10);
       };
 
       const findPlayer = (name) => {
@@ -316,6 +331,12 @@
         };
 
         setTeams(prev => [...prev, team]);
+
+        // Clear inputs and suggestions after adding
+        setP1Name("");
+        setP2Name("");
+        setP1Suggestions([]);
+        setP2Suggestions([]);
       };
 
       const handleDownloadTeams = () => {
@@ -350,6 +371,7 @@
               <p class="text-xs text-gray-600">
                 First upload a CSV below to load player scores. Then choose Player 1 and Player 2.
                 We’ll calculate the Front 9 and Back 9 best-ball totals hole by hole.
+                Once a name is used in any team, it is removed from the suggestions list.
               </p>
 
               <div class="space-y-2">
@@ -364,8 +386,8 @@
                       setP1Suggestions(filterNames(v));
                     }}
                     onFocus=${e => setP1Suggestions(filterNames(e.target.value))}
-                    placeholder="Start typing a name…"
-                    disabled=${players.length === 0}
+                    placeholder=${players.length === 0 ? "Upload CSV first…" : "Start typing a name…"}
+                    disabled=${players.length === 0 || availableNames.length === 0}
                   />
                   ${p1Suggestions.length > 0 && html`
                     <div class="suggest-box">
@@ -395,8 +417,8 @@
                       setP2Suggestions(filterNames(v));
                     }}
                     onFocus=${e => setP2Suggestions(filterNames(e.target.value))}
-                    placeholder="Start typing a name…"
-                    disabled=${players.length === 0}
+                    placeholder=${players.length === 0 ? "Upload CSV first…" : "Start typing a name…"}
+                    disabled=${players.length === 0 || availableNames.length === 0}
                   />
                   ${p2Suggestions.length > 0 && html`
                     <div class="suggest-box">
@@ -419,7 +441,7 @@
               <button
                 class="btn mt-2"
                 onClick=${handleAddTeam}
-                disabled=${players.length === 0}
+                disabled=${players.length === 0 || availableNames.length === 0}
               >
                 Add Team
               </button>
